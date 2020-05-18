@@ -211,6 +211,32 @@ void ComputeUlsdFixedBin(vector<vector<double>>& conf_rank, vector<double>& tota
         index+=1;
         *spec_counter += 1;
     }
+ 
+	//add the extremal lambda
+	vector<int> stopper;
+	int aux;
+	int condition;	
+
+	while((stopper.size()< (unsigned int) num_conf) && ((unsigned int)index<total_eigs.size()-1)){
+		aux = conf_array[index];
+		condition=0;
+		for(unsigned int k=0; k<stopper.size();k++){
+			if(aux==stopper[k]){
+				condition=1;
+			}	
+		}
+		
+		if(condition==1){
+			index+=1;
+		}
+		else{
+			conf_rank[conf_array[index]].push_back((double)(index+1)/num_conf);
+			stopper.push_back(aux);
+			index +=1;
+		}
+
+	}
+		
 
     //compute the ulsd
     for(int i=0;i<num_conf;i++){
@@ -260,6 +286,7 @@ void Is0Boostrap(vector<double>& total_eigs, arg_list args, int num_conf,
                  int num_resampling, 
                  vector<double>& Is0, vector<double>& err_Is0, 
                  vector<double>& spec_den, vector<double>& err_spec_den, 
+ 				 vector<double>& ave_s, vector<double>& err_ave_s,
                  vector<double>& array_bin){
 
     //Initialize stuff
@@ -271,6 +298,8 @@ void Is0Boostrap(vector<double>& total_eigs, arg_list args, int num_conf,
     vector<double> errIs0_aux(bins.size()-1, 0.0); 
     vector<double> spec_den_aux(bins.size()-1, 0.0);
     vector<double> err_spec_den_aux(bins.size()-1, 0.0); 
+    vector<double> ave_s_aux(bins.size()-1, 0.0);
+    vector<double> err_ave_s_aux(bins.size()-1, 0.0); 
     vector<int> conf_array(total_eigs.size(), 0);
     vector<vector<double>> conf_rank(num_conf);
     int spec_den_counter;
@@ -308,11 +337,11 @@ void Is0Boostrap(vector<double>& total_eigs, arg_list args, int num_conf,
             for(unsigned int b =0;b<ulsd.size();b++){
                aux2 = aux2 + ulsd[b]/ulsd.size();
             }
-            for(unsigned int b =0;b<ulsd.size();b++){
-               ulsd[b]= ulsd[b]/aux2;
-            }
-            
+           
+ 
             //actual computation of Is0
+			ave_s_aux[bbin] += aux2/num_resampling;
+			err_ave_s_aux[bbin] += pow(aux2, 2 );
             Is0_aux[bbin]+=((Is0Calculator(ulsd))/num_resampling);
             errIs0_aux[bbin]+=pow((Is0Calculator(ulsd)), 2);
             spec_den_aux[bbin] += (double) spec_den_counter/num_resampling; 
@@ -326,7 +355,9 @@ void Is0Boostrap(vector<double>& total_eigs, arg_list args, int num_conf,
     }
 
     for(unsigned int i=0;i<Is0_aux.size();i++){
-        Is0.push_back(Is0_aux[i]);
+     	ave_s.push_back(ave_s_aux[i]);
+		err_ave_s.push_back(sqrt(err_ave_s_aux[i]/num_resampling - pow(ave_s_aux[i],2)));
+	    Is0.push_back(Is0_aux[i]);
         err_Is0.push_back(sqrt(errIs0_aux[i]/num_resampling - pow(Is0_aux[i],2)));
         spec_den.push_back(spec_den_aux[i]/interval);
         err_spec_den.push_back(sqrt(err_spec_den_aux[i]/num_resampling - pow(spec_den_aux[i],2))/interval);
@@ -362,6 +393,8 @@ int main(int argc, char** argv){
     vector<double> err_Is0;
     vector<double> spec_den;
     vector<double> err_spec_den;
+	vector<double> ave_s;
+	vector<double>err_ave_s;
     vector<double> array_bins;
     int num_conf;
     
@@ -377,7 +410,7 @@ int main(int argc, char** argv){
     num_conf = total_eigs.size()/num_eigval;
     cout<<"Total number of conf: "<<total_eigs.size()/args.num_eigval<<endl;
 
-    Is0Boostrap(total_eigs, args, num_conf, args.num_resampling, Is0, err_Is0, spec_den, err_spec_den, array_bins);
+    Is0Boostrap(total_eigs, args, num_conf, args.num_resampling, Is0, err_Is0, spec_den, err_spec_den, ave_s, err_ave_s, array_bins);
 
     FILE* out = fopen(args.outfile.c_str(), "w");
 
@@ -388,7 +421,7 @@ int main(int argc, char** argv){
 
 
     for(unsigned int i=0;i<Is0.size();i++){
-        fprintf(out, "%.16lg %.16lg %.16lg %.16lg %.16lg\n", array_bins[i], Is0[i], err_Is0[i], spec_den[i]/num_conf, err_spec_den[i]/num_conf);
+        fprintf(out, "%.16lg %.16lg %.16lg %.16lg %.16lg %.16lg %.16lg\n", array_bins[i], Is0[i], err_Is0[i], spec_den[i]/num_conf, err_spec_den[i]/num_conf, ave_s[i], err_ave_s[i]);
     }
 
     fclose(out);
