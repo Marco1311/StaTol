@@ -4,7 +4,7 @@ CXX = g++
 CXXFLAGS = -Wall -Wextra -std=c++11
 
 
-main: C-SpectralDensity.cpp
+main: C-UnfoldingLevelSpacing.cpp
 	$(CXX) $(CXXFLAGS)  $^ -o $@
 
 
