@@ -27,6 +27,8 @@ const double S_CRIT=0.508;
 
 struct arg_list{
     int num_eigval = 100;
+ 	int Ls = 4;
+	int Lt = 4;
     int spectral_bins = 30;
     int num_resampling = 50;
     string infile = "";
@@ -38,6 +40,8 @@ struct arg_list{
 
 ostream& operator<<(ostream& os, const arg_list& al){
     os<<"Number of eigenvalues: "<<al.num_eigval<<endl;
+    os<<"Spatial extension: "<<al.Ls<<endl;
+    os<<"Temporal extenion: "<<al.Lt<<endl;
     os<<"Number of spectral bins: "<<al.spectral_bins<<endl;
     os<<"Number of resamplings: "<<al.num_resampling<<endl;
     os<<"Input datafile: "<<al.infile<<endl;
@@ -48,10 +52,12 @@ ostream& operator<<(ostream& os, const arg_list& al){
 void parse_arguments(arg_list& arg, char** argv){
     //int fixed_args = 4;
     arg.num_eigval = atoi(argv[1]);
-    arg.spectral_bins = atoi(argv[2]);
-    arg.num_resampling = atoi(argv[3]);
-    arg.infile = argv[4];
-    arg.outfile = argv[5];
+ 	arg.Ls = atoi(argv[2]);
+ 	arg.Lt = atoi(argv[3]);
+    arg.spectral_bins = atoi(argv[4]);
+    arg.num_resampling = atoi(argv[5]);
+    arg.infile = argv[6];
+    arg.outfile = argv[7];
 
     //Arguments checkings:
     if(arg.infile == ""){
@@ -83,8 +89,7 @@ void LoadInput(arg_list arg, vector<double>& total_eigs ){
     }    
 
     while((fscanf(input_eigs, "%lf", &aux_eig) == 1)){
-        total_eigs.push_back(aux_eig);
-    }    
+        total_eigs.push_back(aux_eig);    }    
 
     fclose(input_eigs);
 
@@ -259,6 +264,25 @@ void PrintUlsdFixedBin(vector<vector<double>>& ulsd, int num_conf){
     } 
 }
 
+double meanCalculator(vector<double>& ulsd){
+	double m =0.0;
+	for(unsigned int i=0;i<ulsd.size();i++){
+		m+=ulsd[i];
+	}
+	m/=ulsd.size();
+	return m;
+}
+
+double sigma2Calculator(vector<double>& ulsd){
+    double mean;
+	mean = meanCalculator(ulsd);
+	double var = 0;
+    for(unsigned int i=0;i<ulsd.size();i++){
+            var += (ulsd[i]-mean)*(ulsd[i]-mean);
+        }
+	var/= (ulsd.size()-1);
+    return var;
+}
 
 double Is0Calculator(vector<double>& ulsd){
     double counter=0.0;
@@ -285,7 +309,9 @@ void CreateSampleArray(vector<double>&total_eigs, vector<double>& sampled_eigs, 
 void Is0Boostrap(vector<double>& total_eigs, arg_list args, int num_conf, 
                  int num_resampling, 
                  vector<double>& Is0, vector<double>& err_Is0, 
+                 vector<double>& sigma2, vector<double>& err_sigma2, 
                  vector<double>& spec_den, vector<double>& err_spec_den, 
+                 vector<double>& count_eigval, vector<double>& err_count_eigval, 
  				 vector<double>& ave_s, vector<double>& err_ave_s,
                  vector<double>& array_bin){
 
@@ -300,6 +326,8 @@ void Is0Boostrap(vector<double>& total_eigs, arg_list args, int num_conf,
     vector<double> err_spec_den_aux(bins.size()-1, 0.0); 
     vector<double> ave_s_aux(bins.size()-1, 0.0);
     vector<double> err_ave_s_aux(bins.size()-1, 0.0); 
+    vector<double> sigma2_aux(bins.size()-1, 0.0);
+    vector<double> errsigma2_aux(bins.size()-1, 0.0); 
     vector<int> conf_array(total_eigs.size(), 0);
     vector<vector<double>> conf_rank(num_conf);
     int spec_den_counter;
@@ -346,6 +374,8 @@ void Is0Boostrap(vector<double>& total_eigs, arg_list args, int num_conf,
             errIs0_aux[bbin]+=pow((Is0Calculator(ulsd)), 2);
             spec_den_aux[bbin] += (double) spec_den_counter/num_resampling; 
             err_spec_den_aux[bbin] += pow( (double) spec_den_counter, 2); 
+            sigma2_aux[bbin]+=((sigma2Calculator(ulsd))/num_resampling);
+            errsigma2_aux[bbin]+=pow((sigma2Calculator(ulsd)), 2);
 
             for(int i=0; i<num_conf;i++){
                 conf_rank[i].resize(0);
@@ -361,6 +391,10 @@ void Is0Boostrap(vector<double>& total_eigs, arg_list args, int num_conf,
         err_Is0.push_back(sqrt(errIs0_aux[i]/num_resampling - pow(Is0_aux[i],2)));
         spec_den.push_back(spec_den_aux[i]/interval);
         err_spec_den.push_back(sqrt(err_spec_den_aux[i]/num_resampling - pow(spec_den_aux[i],2))/interval);
+        count_eigval.push_back(spec_den_aux[i]);
+        err_count_eigval.push_back(sqrt(err_spec_den_aux[i]/num_resampling - pow(spec_den_aux[i],2)));
+        sigma2.push_back(sigma2_aux[i]);
+        err_sigma2.push_back(sqrt(errsigma2_aux[i]/num_resampling - pow(sigma2_aux[i],2)));
     }
 
 
@@ -372,8 +406,8 @@ arg_list args;
 
 int main(int argc, char** argv){
 
-    if(argc<6){
-        printf("Usage: %s <num eigvals> <num spectral bins> <num num_resampling> <inputfile> <outputfile>\n\n", argv[0]);
+    if(argc<8){
+        printf("Usage: %s <num eigvals> <Ls> <Lt> <num spectral bins> <num num_resampling> <inputfile> <outputfile>\n\n", argv[0]);
         exit(1);
     }
     
@@ -384,6 +418,8 @@ int main(int argc, char** argv){
     parse_arguments(args, argv);
 
     int num_eigval = args.num_eigval;
+	int Ls = args.Ls;
+	int Lt = args.Lt;
     string  otufilename(args.outfile);
     string  infile(args.infile);
 
@@ -391,10 +427,14 @@ int main(int argc, char** argv){
     vector<double> total_eigs;
     vector<double> Is0;
     vector<double> err_Is0;
+	vector<double> sigma2;
+	vector<double> err_sigma2;
     vector<double> spec_den;
     vector<double> err_spec_den;
+	vector<double> count_eigval;
+	vector<double> err_count_eigval;
 	vector<double> ave_s;
-	vector<double>err_ave_s;
+	vector<double> err_ave_s;
     vector<double> array_bins;
     int num_conf;
     
@@ -410,7 +450,7 @@ int main(int argc, char** argv){
     num_conf = total_eigs.size()/num_eigval;
     cout<<"Total number of conf: "<<total_eigs.size()/args.num_eigval<<endl;
 
-    Is0Boostrap(total_eigs, args, num_conf, args.num_resampling, Is0, err_Is0, spec_den, err_spec_den, ave_s, err_ave_s, array_bins);
+    Is0Boostrap(total_eigs, args, num_conf, args.num_resampling, Is0, err_Is0, sigma2, err_sigma2, spec_den, err_spec_den, count_eigval, err_count_eigval, ave_s, err_ave_s, array_bins);
 
     FILE* out = fopen(args.outfile.c_str(), "w");
 
@@ -421,7 +461,10 @@ int main(int argc, char** argv){
 
 
     for(unsigned int i=0;i<Is0.size();i++){
-        fprintf(out, "%.16lg %.16lg %.16lg %.16lg %.16lg %.16lg %.16lg\n", array_bins[i], Is0[i], err_Is0[i], spec_den[i]/num_conf, err_spec_den[i]/num_conf, ave_s[i], err_ave_s[i]);
+        fprintf(out, "%.16lg %.16lg %.16lg %.16lg %.16lg %.16lg %.16lg %.16lg %.16lg %.16lg %.16lg\n", array_bins[i], Is0[i], err_Is0[i], sigma2[i], err_sigma2[i], 
+																		   							   spec_den[i]/(num_conf*Ls*Ls*Ls*Lt), err_spec_den[i]/(Ls*Ls*Ls*Lt*num_conf), 
+		 																   							   count_eigval[i], err_count_eigval[i],
+																		   							   ave_s[i], err_ave_s[i]);
     }
 
     fclose(out);
