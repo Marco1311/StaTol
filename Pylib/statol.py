@@ -1,8 +1,9 @@
 ################################
-#			                   #
+#			       #
 #  Library for Data Analysis   #
-#			                   #
+#			       #
 ################################
+
 import numpy as np
 
 
@@ -112,9 +113,10 @@ def jack_for_composite(comp_func, N, *args):
         mean_values_list.append(mean)        
 
     composite_jack = comp_func(jack_list)
+    composite_jack = np.array(composite_jack)
     
     mean_value = num_blocks*comp_func(mean_values_list) - (num_blocks - 1)*np.mean(composite_jack)   
-    err = np.std(composite_jack)*np.sqrt(num_blocks - 1)
+    err = np.std(composite_jack, ddof=1)*np.sqrt(num_blocks - 1)
     
     return mean_value, err
     
