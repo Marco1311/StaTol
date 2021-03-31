@@ -16,7 +16,7 @@ def chi2reduced(y_measure, y_predict, errors, number_of_parameters):
 
 #fit procedure 
 def FitData(func, x, y, yerr, *param):
-    popt, pcov = curve_fit(func, x, y, p0 = param, sigma = yerr)
+    popt, pcov = curve_fit(func, x, y, p0 = param, sigma = yerr, absolute_sigma=True)
     perr = np.sqrt(np.diag(pcov))
     chi2r = chi2reduced(y, func(x, *popt), yerr, len(param))
     
